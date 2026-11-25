@@ -1,0 +1,148 @@
+# Build + ký + phát hành bộ cài Windows (ADR-0003: x64 và ARM64, NSIS cài theo người dùng).
+# - Đẩy thẻ vX.Y.Z: build hai đích, tạo bản phát hành NHÁP có hai bộ cài, chữ ký .sig, latest.json, SHA256SUMS.txt.
+#   Bản nháp không hiện ở `releases/latest` nên updater chưa thấy gì cho tới khi chủ dự án bấm Publish - đó là điểm
+#   duyệt cuối cùng trước khi bản mới tới mọi máy đã cài.
+# - Chạy tay (workflow_dispatch): chỉ build và để lại artifact, không tạo bản phát hành.
+# Khoá ký cập nhật chỉ ở GitHub Secrets (AGENTS.md luật 1, 6). Không nội suy dữ liệu sự kiện vào `run:`.
+name: phat-hanh
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phat-hanh-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    runs-on: windows-2025
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            arch: x64
+          - target: aarch64-pc-windows-msvc
+            arch: arm64
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Thẻ khớp phiên bản trong ba tệp khai
+        if: github.ref_type == 'tag'
+        env:
+          THE: ${{ github.ref_name }}
+        run: node scripts/kiem-phien-ban.mjs "$THE"
+      - name: Phiên bản khớp nhau
+        if: github.ref_type != 'tag'
+        run: node scripts/kiem-phien-ban.mjs
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Build bộ cài NSIS (${{ matrix.arch }})
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TARGET: ${{ matrix.target }}
+        run: npx tauri build --ci --target "$TARGET" --bundles nsis
+
+      # Bundler đặt tên theo productName có dấu ("UBND Núi Cấm_0.1.0_x64-setup.exe"); bản phát hành dùng tên ASCII cố
+      # định mà latest.json và trang tải trỏ tới. Chữ ký .sig ký NỘI DUNG tệp nên đổi tên không làm hỏng nó.
+      # Thiếu .sig = khoá ký chưa nạp vào Secrets: dừng ở đây, vì mọi máy đã cài sẽ từ chối bản này.
+      - name: Đặt tên phát hành + kiểm đã ký
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          ver=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          nsis="src-tauri/target/$TARGET/release/bundle/nsis"
+          ls -la "$nsis"
+          exe=$(find "$nsis" -maxdepth 1 -name '*-setup.exe' | head -1)
+          test -n "$exe" || { echo "::error::không thấy bộ cài NSIS"; exit 1; }
+          test -s "$exe.sig" || { echo "::error::không có chữ ký .sig - TAURI_SIGNING_PRIVATE_KEY chưa nạp?"; exit 1; }
+          mkdir -p dist
+          cp "$exe" "dist/ubnd-app_${ver}_windows-${ARCH}-setup.exe"
+          cp "$exe.sig" "dist/ubnd-app_${ver}_windows-${ARCH}-setup.exe.sig"
+          (cd dist && sha256sum *)
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bo-cai-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  phat-hanh:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: bo-cai-*
+          path: dist
+          merge-multiple: true
+
+      - name: Ghi chú phát hành từ CHANGELOG.md
+        env:
+          THE: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ver="${THE#v}"
+          # Mục "## <ver>" tới mục kế tiếp. Không có mục = dừng: hộp thoại cập nhật hiện đúng đoạn này cho người dùng.
+          awk -v v="## $ver" '$0 ~ "^## " { if (dang) exit; if (index($0, v) == 1) { dang = 1; next } } dang' CHANGELOG.md > ghi-chu.md
+          test -s ghi-chu.md || { echo "::error::CHANGELOG.md thiếu mục ## $ver"; exit 1; }
+          cat ghi-chu.md
+
+      - name: latest.json + SHA256SUMS.txt
+        env:
+          THE: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          node scripts/tao-latest-json.mjs dist "$THE" "$REPO" ghi-chu.md
+          (cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - name: Tạo bản phát hành NHÁP
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          THE: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          {
+            cat ghi-chu.md
+            printf '\n\n### Tải về\n\n'
+            printf -- '- Máy Windows 10/11 thông thường (Intel/AMD): `ubnd-app_%s_windows-x64-setup.exe`\n' "${THE#v}"
+            printf -- '- Máy Windows chip ARM (Snapdragon X, Surface ARM): `ubnd-app_%s_windows-arm64-setup.exe`\n' "${THE#v}"
+            printf '\nKiểm tệp tải về: `sha256sum -c SHA256SUMS.txt --ignore-missing`.\n'
+            printf 'Bộ cài chưa ký Authenticode: Windows SmartScreen có thể báo "Nhà phát hành không xác định".\n'
+          } > ghi-chu-day-du.md
+          gh release create "$THE" dist/* --draft --verify-tag --title "UBND Núi Cấm ${THE#v}" --notes-file ghi-chu-day-du.md

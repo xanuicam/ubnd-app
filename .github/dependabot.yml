@@ -7,8 +7,14 @@ updates:
     groups:
       actions:
         patterns: ['*']
-  # Bật khi pha A1 thêm src-tauri/ (Cargo) và package.json:
-  # - package-ecosystem: cargo
-  #   directory: /src-tauri
-  # - package-ecosystem: npm
-  #   directory: /
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+    groups:
+      tauri:
+        patterns: ['tauri*']
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly

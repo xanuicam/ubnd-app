@@ -2,6 +2,7 @@
 
 - Ngày: 26/11/2026
 - Trạng thái: Chấp nhận (chủ dự án chốt 26/11/2026). Thay mục "Windows, macOS, Linux" của ADR-0001.
+- Đã sửa bởi ADR-0003 (thêm Windows ARM64; Android thêm armeabi-v7a + x86_64).
 
 ## Quyết định
 

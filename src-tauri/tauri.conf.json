@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "UBND Núi Cấm",
+  "mainBinaryName": "ubnd-app",
+  "version": "0.1.0",
+  "identifier": "vn.xanuicam.dieuhanh",
+  "build": {
+    "frontendDist": "https://dieuhanh.xanuicam.vn"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'none'",
+      "capabilities": []
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "publisher": "UBND xã Núi Cấm",
+    "copyright": "UBND xã Núi Cấm",
+    "homepage": "https://dieuhanh.xanuicam.vn",
+    "category": "Business",
+    "shortDescription": "Hệ thống điều hành công việc UBND xã Núi Cấm",
+    "longDescription": "Ứng dụng cài đặt của Hệ thống điều hành công việc UBND xã Núi Cấm. Toàn bộ dữ liệu và đăng nhập vẫn ở hệ thống web dieuhanh.xanuicam.vn.",
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["Vietnamese"],
+        "installerIcon": "icons/icon.ico"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/xanuicam/ubnd-app/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQzNTkxNzY3QkUwOEIwNjIKUldSaXNBaStaeGRaUTF3UUtBUEZrL0pvVHdwUmJKdVk4Wk11SGVWTUllN1cvNG02SW1ibTNoNEwK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}
