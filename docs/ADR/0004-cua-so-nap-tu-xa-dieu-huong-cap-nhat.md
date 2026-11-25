@@ -39,4 +39,7 @@ desktop. Cần chốt: trang web trong cửa sổ được làm gì, liên kết
 - App cần mạng; mất mạng thấy trang lỗi của WebView2 (trang ngoại tuyến riêng để pha sau).
 - Cửa sổ con (`NewWindowResponse::Allow`) không mang chính sách điều hướng của cửa sổ chính - chấp nhận vì chỉ mở được
   cho hai origin của hệ thống.
+- Pha A1b (chủ dự án chốt 26/11/2026: màn "Ứng dụng của tôi" mở `dieuhanh.`, `tailieu.`, `dulieu.`, `khodulieu.`,
+  `trungtamdieuhanh.`, `quantri.`, mỗi ô một WebView riêng đúng origin; `thongtin.` là liên kết ra trình duyệt; không
+  kiosk) sẽ đổi `ORIGIN_TRONG_APP` từ hằng số thành danh sách theo từng cửa sổ - cần ADR mới, không nới danh sách chung.
 - Bộ cài chưa ký Authenticode tới khi có chứng thư: SmartScreen cảnh báo lần đầu.
