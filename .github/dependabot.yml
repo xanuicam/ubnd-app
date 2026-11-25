@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+  # Bật khi pha A1 thêm src-tauri/ (Cargo) và package.json:
+  # - package-ecosystem: cargo
+  #   directory: /src-tauri
+  # - package-ecosystem: npm
+  #   directory: /

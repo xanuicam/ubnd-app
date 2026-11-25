@@ -1,0 +1,38 @@
+# Quét bí mật trên toàn bộ lịch sử ở mỗi lượt đẩy/PR. gitleaks chạy bằng BINARY ghim sha256 (gitleaks-action đòi giấy phép
+# cho tài khoản tổ chức). Quyền chỉ đọc; không nội suy dữ liệu của sự kiện vào lệnh.
+name: bao-mat
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bao-mat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Cài gitleaks 8.30.1 (kiểm sha256)
+        env:
+          GL_VER: 8.30.1
+          GL_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl -fsSL -o gl.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GL_VER}/gitleaks_${GL_VER}_linux_x64.tar.gz"
+          echo "${GL_SHA256}  gl.tgz" | sha256sum -c -
+          tar -xzf gl.tgz gitleaks
+      - name: Quét toàn bộ lịch sử
+        run: ./gitleaks git --redact --exit-code 1 .
