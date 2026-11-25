@@ -1,0 +1,49 @@
+# Kiểm vỏ Tauri ở mỗi PR/lượt đẩy main: định dạng, clippy, test chính sách điều hướng, biên dịch cả hai đích Windows.
+# Chỉ runner Windows (ADR-0002/0003: không macOS/Linux). Quyền chỉ đọc; không nội suy dữ liệu sự kiện vào lệnh.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vo-tauri:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+      - name: Phiên bản khớp nhau (package.json, Cargo.toml, tauri.conf.json)
+        run: node scripts/kiem-phien-ban.mjs
+      - name: Định dạng
+        working-directory: src-tauri
+        run: cargo fmt --check
+      - name: Clippy (x64)
+        working-directory: src-tauri
+        run: cargo clippy --locked --all-targets --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test (x64)
+        working-directory: src-tauri
+        run: cargo test --locked --target x86_64-pc-windows-msvc
+      - name: Biên dịch ARM64 (chéo)
+        working-directory: src-tauri
+        run: cargo check --locked --target aarch64-pc-windows-msvc

@@ -5,6 +5,8 @@
 
 ## Bối cảnh
 
+> Phạm vi nền tảng: xem ADR-0002 (đã sửa bởi ADR-0003).
+
 Hệ thống điều hành UBND xã Núi Cấm là ứng dụng web (React + Vite, backend Express) đã chạy thật. Cần bản cài đặt cho
 Windows, macOS, Linux, Android, iOS. Repo chính là riêng tư và đã hết phút GitHub Actions miễn phí (không có kinh phí
 trả thêm), nên không build được bản cài đa nền tảng ở đó - nhất là macOS/iOS cần máy chủ macOS.
