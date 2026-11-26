@@ -1,8 +1,10 @@
-//! Chính sách điều hướng của cửa sổ app (AGENTS.md luật 5).
+//! Chính sách điều hướng của cửa sổ app (AGENTS.md luật 5, ADR-0004, ADR-0005).
 //!
-//! Cửa sổ chỉ hiển thị hai origin của hệ thống: app cán bộ và cửa đăng nhập tập trung. Mọi liên kết ra ngoài mở bằng
-//! trình duyệt hệ thống, để một trang lạ không bao giờ chạy trong khung app (người dùng không thấy thanh địa chỉ, nên
-//! không phân biệt được trang thật với trang giả).
+//! MỖI CỬA SỔ MỘT DANH SÁCH ORIGIN (ADR-0005, pha A1b): cửa sổ chính hiển thị app cán bộ + cửa đăng nhập; mỗi ứng dụng
+//! khác của hệ thống (`quantri.`, `dulieu.`...) mở trong CỬA SỔ RIÊNG chỉ hiển thị origin của chính nó + cửa đăng nhập.
+//! Không cửa sổ nào hiển thị origin của ứng dụng khác - giữ đúng cách ly phiên host-only của SSO như trên trình duyệt.
+//! Mọi liên kết ra ngoài mở bằng trình duyệt hệ thống, để một trang lạ không bao giờ chạy trong khung app (người dùng
+//! không thấy thanh địa chỉ, nên không phân biệt được trang thật với trang giả).
 //!
 //! Hàm ở đây là hàm thuần (không đụng Tauri) để kiểm thử được trên mọi máy, kể cả máy không có WebView.
 //!
@@ -14,9 +16,73 @@
 
 use url::Url;
 
-/// Origin được hiển thị trong cửa sổ app. So khớp TUYỆT ĐỐI scheme + host + cổng, không so tiền tố chuỗi
+/// Origin được hiển thị trong cửa sổ CHÍNH. So khớp TUYỆT ĐỐI scheme + host + cổng, không so tiền tố chuỗi
 /// (`https://dieuhanh.xanuicam.vn.ke-gian.vn` không được lọt).
 pub const ORIGIN_TRONG_APP: [&str; 2] = ["dieuhanh.xanuicam.vn", "id.xanuicam.vn"];
+
+/// Cửa đăng nhập tập trung - mọi cửa sổ ứng dụng đều phải tới được để đi SSO.
+pub const ORIGIN_DANG_NHAP: &str = "id.xanuicam.vn";
+
+/// Ứng dụng của hệ thống được mở trong cửa sổ RIÊNG (màn "Ứng dụng của tôi" - repo chính `GET /api/auth/me/ung-dung`).
+/// (host, nhãn cửa sổ, tiêu đề). `thongtin.` (trang công khai) và `kiosk.` (dự án riêng) cố ý KHÔNG có ở đây.
+pub const UNG_DUNG_CUA_SO_RIENG: [(&str, &str, &str); 5] = [
+    (
+        "quantri.xanuicam.vn",
+        "ud-quantri",
+        "Quản trị hệ thống - UBND xã Núi Cấm",
+    ),
+    (
+        "dulieu.xanuicam.vn",
+        "ud-dulieu",
+        "Bảng dữ liệu - UBND xã Núi Cấm",
+    ),
+    (
+        "khodulieu.xanuicam.vn",
+        "ud-khodulieu",
+        "Kho dữ liệu - UBND xã Núi Cấm",
+    ),
+    (
+        "trungtamdieuhanh.xanuicam.vn",
+        "ud-trungtamdieuhanh",
+        "Trung tâm điều hành - UBND xã Núi Cấm",
+    ),
+    (
+        "tailieu.xanuicam.vn",
+        "ud-tailieu",
+        "Tài liệu cuộc họp - UBND xã Núi Cấm",
+    ),
+];
+
+/// Cửa sổ đang ra quyết định.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CuaSo {
+    /// Cửa sổ chính (`dieuhanh.`).
+    Chinh,
+    /// Cửa sổ riêng của một ứng dụng - mang host của ứng dụng đó (phần tử của `UNG_DUNG_CUA_SO_RIENG`).
+    UngDung(&'static str),
+}
+
+impl CuaSo {
+    /// Tra cửa sổ theo nhãn Tauri; nhãn lạ ⇒ `None` (không đoán quyền cho cửa sổ không biết).
+    #[cfg(test)]
+    pub fn tu_nhan(nhan: &str) -> Option<CuaSo> {
+        if nhan == "main" {
+            return Some(CuaSo::Chinh);
+        }
+        UNG_DUNG_CUA_SO_RIENG
+            .iter()
+            .find(|(_, n, _)| *n == nhan)
+            .map(|(host, _, _)| CuaSo::UngDung(host))
+    }
+
+    /// Origin cửa sổ này được hiển thị.
+    fn origin(self) -> Vec<&'static str> {
+        match self {
+            CuaSo::Chinh => ORIGIN_TRONG_APP.to_vec(),
+            CuaSo::UngDung(host) => vec![host, ORIGIN_DANG_NHAP],
+        }
+    }
+}
 
 /// Nguồn iframe mà CSP `frame-src` của `dieuhanh.` và `id.` cho phép (đối chiếu `frontend/public/_headers`,
 /// `frontend-id/public/_headers` ở repo chính). Thêm nguồn nhúng mới ở web thì thêm vào đây cùng đợt.
@@ -33,6 +99,10 @@ pub const URL_KHOI_DONG: &str = "https://dieuhanh.xanuicam.vn/";
 pub enum QuyetDinh {
     /// Cho nạp trong cửa sổ app.
     ChoPhep,
+    /// Chặn ở cửa sổ này, mở (hoặc đưa lên trước) cửa sổ riêng của ứng dụng có host đó, nạp đúng URL này.
+    MoCuaSoUngDung(&'static str),
+    /// Chặn ở cửa sổ ứng dụng, nạp URL này vào cửa sổ CHÍNH (liên kết từ `quantri.` tới một công việc ở `dieuhanh.`).
+    VeCuaSoChinh,
     /// Chặn và mở bằng trình duyệt (hoặc ứng dụng thư/điện thoại) của hệ điều hành.
     MoBenNgoai,
     /// Chặn hẳn: scheme lạ có thể gọi trình xử lý giao thức bất kỳ trên máy (vd `ms-msdt:`, `file:`).
@@ -47,15 +117,36 @@ fn la_https_cua(url: &Url, danh_sach: &[&str]) -> bool {
         && url.host_str().is_some_and(|host| danh_sach.contains(&host))
 }
 
-/// URL thuộc origin hiển thị trong app (https, đúng host, cổng mặc định, không kèm thông tin đăng nhập).
-pub fn la_origin_trong_app(url: &Url) -> bool {
-    la_https_cua(url, &ORIGIN_TRONG_APP)
+/// Host của ứng dụng có cửa sổ riêng mà URL thuộc về (https, đúng host, cổng mặc định, không thông tin đăng nhập).
+fn ung_dung_cua(url: &Url) -> Option<&'static str> {
+    UNG_DUNG_CUA_SO_RIENG
+        .iter()
+        .map(|(host, _, _)| *host)
+        .find(|host| la_https_cua(url, &[host]))
 }
 
-/// `blob:https://dieuhanh.xanuicam.vn/<uuid>` - tệp do chính trang trong app tạo ra (xem trước PDF, ảnh).
-fn la_blob_trong_app(url: &Url) -> bool {
+/// Nhãn + tiêu đề cửa sổ của một ứng dụng.
+pub fn nhan_va_tieu_de(host: &str) -> Option<(&'static str, &'static str)> {
+    UNG_DUNG_CUA_SO_RIENG
+        .iter()
+        .find(|(h, _, _)| *h == host)
+        .map(|(_, nhan, tieu_de)| (*nhan, *tieu_de))
+}
+
+/// URL thuộc origin hiển thị trong cửa sổ chính.
+#[cfg(test)]
+pub fn la_origin_trong_app(url: &Url) -> bool {
+    la_origin_cua(CuaSo::Chinh, url)
+}
+
+fn la_origin_cua(cua_so: CuaSo, url: &Url) -> bool {
+    la_https_cua(url, &cua_so.origin())
+}
+
+/// `blob:https://dieuhanh.xanuicam.vn/<uuid>` - tệp do chính trang trong cửa sổ tạo ra (xem trước PDF, ảnh).
+fn la_blob_cua(cua_so: CuaSo, url: &Url) -> bool {
     url.scheme() == "blob"
-        && Url::parse(url.path()).is_ok_and(|ben_trong| la_origin_trong_app(&ben_trong))
+        && Url::parse(url.path()).is_ok_and(|ben_trong| la_origin_cua(cua_so, &ben_trong))
 }
 
 /// Liên kết mở được bằng ứng dụng của hệ điều hành. Chỉ bốn scheme quen thuộc; mọi scheme khác bị chặn.
@@ -67,32 +158,52 @@ fn mo_ben_ngoai_duoc(url: &Url) -> bool {
     }
 }
 
-/// Quyết định cho một lượt điều hướng trong cửa sổ (khung chính, và iframe trên macOS/Linux).
-pub fn quyet_dinh_dieu_huong(url: &Url) -> QuyetDinh {
-    if la_origin_trong_app(url) || la_https_cua(url, &NGUON_NHUNG) || la_blob_trong_app(url) {
-        return QuyetDinh::ChoPhep;
-    }
-    // Khung rỗng của iframe (`about:blank`, `about:srcdoc`) không nạp gì từ mạng.
-    if url.scheme() == "about" && matches!(url.path(), "blank" | "srcdoc") {
-        return QuyetDinh::ChoPhep;
-    }
-    if mo_ben_ngoai_duoc(url) {
+/// Phần chung: origin của cửa sổ thì cho; ứng dụng khác có cửa sổ riêng thì chuyển sang đó; còn lại ra ngoài/chặn.
+fn ngoai_origin(url: &Url) -> QuyetDinh {
+    if la_origin_cua(CuaSo::Chinh, url) {
+        // Chỉ tới được đây từ cửa sổ ứng dụng (cửa sổ chính đã cho qua ở bước trước).
+        QuyetDinh::VeCuaSoChinh
+    } else if let Some(host) = ung_dung_cua(url) {
+        QuyetDinh::MoCuaSoUngDung(host)
+    } else if mo_ben_ngoai_duoc(url) {
         QuyetDinh::MoBenNgoai
     } else {
         QuyetDinh::Chan
     }
 }
 
-/// Quyết định cho `window.open` / liên kết `target="_blank"`. Khác điều hướng thường: nguồn nhúng mở cửa sổ mới thì
-/// đó là người dùng bấm "xem trên YouTube" - đưa ra trình duyệt chứ không mở cửa sổ con không có chính sách điều hướng.
-pub fn quyet_dinh_cua_so_moi(url: &Url) -> QuyetDinh {
-    if la_origin_trong_app(url) || la_blob_trong_app(url) {
-        QuyetDinh::ChoPhep
-    } else if mo_ben_ngoai_duoc(url) {
-        QuyetDinh::MoBenNgoai
-    } else {
-        QuyetDinh::Chan
+/// Quyết định cho một lượt điều hướng trong một cửa sổ (khung chính, và iframe trên macOS/Linux).
+pub fn quyet_dinh_dieu_huong_cho(cua_so: CuaSo, url: &Url) -> QuyetDinh {
+    if la_origin_cua(cua_so, url) || la_https_cua(url, &NGUON_NHUNG) || la_blob_cua(cua_so, url) {
+        return QuyetDinh::ChoPhep;
     }
+    // Khung rỗng của iframe (`about:blank`, `about:srcdoc`) không nạp gì từ mạng.
+    if url.scheme() == "about" && matches!(url.path(), "blank" | "srcdoc") {
+        return QuyetDinh::ChoPhep;
+    }
+    ngoai_origin(url)
+}
+
+/// Quyết định cho `window.open` / liên kết `target="_blank"` trong một cửa sổ. Khác điều hướng thường: nguồn nhúng mở
+/// cửa sổ mới thì đó là người dùng bấm "xem trên YouTube" - đưa ra trình duyệt chứ không mở cửa sổ con không có chính
+/// sách điều hướng. Ô của màn "Ứng dụng của tôi" (`target="_blank"` tới `quantri.`...) đi nhánh `MoCuaSoUngDung`.
+pub fn quyet_dinh_cua_so_moi_cho(cua_so: CuaSo, url: &Url) -> QuyetDinh {
+    if la_origin_cua(cua_so, url) || la_blob_cua(cua_so, url) {
+        return QuyetDinh::ChoPhep;
+    }
+    ngoai_origin(url)
+}
+
+/// Cửa sổ chính - giữ tên cũ cho test của pha A1.
+#[cfg(test)]
+pub fn quyet_dinh_dieu_huong(url: &Url) -> QuyetDinh {
+    quyet_dinh_dieu_huong_cho(CuaSo::Chinh, url)
+}
+
+/// Cửa sổ chính - giữ tên cũ cho test của pha A1.
+#[cfg(test)]
+pub fn quyet_dinh_cua_so_moi(url: &Url) -> QuyetDinh {
+    quyet_dinh_cua_so_moi_cho(CuaSo::Chinh, url)
 }
 
 #[cfg(test)]
@@ -145,15 +256,116 @@ mod tests {
     }
 
     #[test]
-    fn app_khac_cua_he_thong_mo_bang_trinh_duyet() {
+    fn trang_cong_khai_va_ngoai_he_thong_mo_bang_trinh_duyet() {
         for s in [
             "https://thongtin.xanuicam.vn/thu-tuc",
-            "https://quantri.xanuicam.vn/",
-            "https://tailieu.xanuicam.vn/",
+            "https://kiosk.xanuicam.vn/",
             "https://xanuicam.vn/",
             "https://zalo.me/123",
         ] {
             assert_eq!(dh(s), QuyetDinh::MoBenNgoai, "{s}");
+            assert_eq!(cs(s), QuyetDinh::MoBenNgoai, "{s}");
+        }
+    }
+
+    #[test]
+    fn ung_dung_khac_cua_he_thong_mo_cua_so_rieng() {
+        assert_eq!(
+            dh("https://quantri.xanuicam.vn/"),
+            QuyetDinh::MoCuaSoUngDung("quantri.xanuicam.vn")
+        );
+        assert_eq!(
+            cs("https://dulieu.xanuicam.vn/bang/1"),
+            QuyetDinh::MoCuaSoUngDung("dulieu.xanuicam.vn")
+        );
+        assert_eq!(
+            cs("https://tailieu.xanuicam.vn/tai-lieu/abc"),
+            QuyetDinh::MoCuaSoUngDung("tailieu.xanuicam.vn")
+        );
+        // Biến thể giả mạo/sai cổng/không https KHÔNG được coi là ứng dụng của hệ thống.
+        for s in [
+            "https://quantri.xanuicam.vn.ke-gian.vn/",
+            "http://quantri.xanuicam.vn/",
+            "https://quantri.xanuicam.vn:8443/",
+            "https://u:p@quantri.xanuicam.vn/",
+        ] {
+            assert_eq!(cs(s), QuyetDinh::MoBenNgoai, "{s}");
+        }
+    }
+
+    fn dh_ud(host: &'static str, s: &str) -> QuyetDinh {
+        quyet_dinh_dieu_huong_cho(CuaSo::UngDung(host), &Url::parse(s).unwrap())
+    }
+
+    fn cs_ud(host: &'static str, s: &str) -> QuyetDinh {
+        quyet_dinh_cua_so_moi_cho(CuaSo::UngDung(host), &Url::parse(s).unwrap())
+    }
+
+    #[test]
+    fn cua_so_ung_dung_chi_hien_origin_cua_no_va_cua_dang_nhap() {
+        let q = "quantri.xanuicam.vn";
+        assert_eq!(
+            dh_ud(q, "https://quantri.xanuicam.vn/account"),
+            QuyetDinh::ChoPhep
+        );
+        assert_eq!(
+            dh_ud(q, "https://id.xanuicam.vn/?next=x"),
+            QuyetDinh::ChoPhep
+        );
+        assert_eq!(
+            dh_ud(q, "blob:https://quantri.xanuicam.vn/u"),
+            QuyetDinh::ChoPhep
+        );
+        // App cán bộ KHÔNG hiển thị trong cửa sổ quản trị - chuyển về cửa sổ chính.
+        assert_eq!(
+            dh_ud(q, "https://dieuhanh.xanuicam.vn/tasks"),
+            QuyetDinh::VeCuaSoChinh
+        );
+        assert_eq!(
+            cs_ud(q, "https://dieuhanh.xanuicam.vn/tasks/1"),
+            QuyetDinh::VeCuaSoChinh
+        );
+        assert_eq!(
+            dh_ud(q, "https://dulieu.xanuicam.vn/"),
+            QuyetDinh::MoCuaSoUngDung("dulieu.xanuicam.vn")
+        );
+        assert_eq!(
+            dh_ud(q, "blob:https://dieuhanh.xanuicam.vn/u"),
+            QuyetDinh::Chan
+        );
+        assert_eq!(
+            cs_ud(q, "https://quantri.xanuicam.vn/x"),
+            QuyetDinh::ChoPhep
+        );
+        assert_eq!(
+            cs_ud(q, "https://thongtin.xanuicam.vn/"),
+            QuyetDinh::MoBenNgoai
+        );
+        assert_eq!(cs_ud(q, "javascript:alert(1)"), QuyetDinh::Chan);
+    }
+
+    #[test]
+    fn nhan_cua_so() {
+        assert_eq!(CuaSo::tu_nhan("main"), Some(CuaSo::Chinh));
+        assert_eq!(
+            CuaSo::tu_nhan("ud-quantri"),
+            Some(CuaSo::UngDung("quantri.xanuicam.vn"))
+        );
+        assert_eq!(CuaSo::tu_nhan("la"), None);
+        for (host, nhan, _) in UNG_DUNG_CUA_SO_RIENG {
+            assert_eq!(CuaSo::tu_nhan(nhan), Some(CuaSo::UngDung(host)));
+            assert_eq!(nhan_va_tieu_de(host).map(|(n, _)| n), Some(nhan));
+            // Nhãn Tauri chỉ nhận chữ, số, `-`, `/`, `:`, `_`.
+            assert!(nhan.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'));
+        }
+        // Cửa sổ ứng dụng không bao giờ được trỏ vào kiosk hay trang công khai.
+        for host in [
+            "kiosk.xanuicam.vn",
+            "thongtin.xanuicam.vn",
+            "id.xanuicam.vn",
+            "dieuhanh.xanuicam.vn",
+        ] {
+            assert_eq!(nhan_va_tieu_de(host), None, "{host}");
         }
     }
 
