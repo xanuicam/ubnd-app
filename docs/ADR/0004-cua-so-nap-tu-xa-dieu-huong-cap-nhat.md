@@ -1,7 +1,7 @@
 # ADR-0004 - Cửa sổ nạp từ xa, chính sách điều hướng và cập nhật có ký (pha A1)
 
 - Ngày: 26/11/2026
-- Trạng thái: Chấp nhận
+- Trạng thái: Chấp nhận (mục 2 sửa đổi bởi ADR-0005: danh sách origin theo từng cửa sổ)
 
 ## Bối cảnh
 

@@ -22,6 +22,7 @@ build cho mọi nền tảng (xem [ADR-0001](docs/ADR/0001-vo-tauri-repo-cong-kh
 | --- | --- | --- |
 | A0 | Khung repo + nền bảo mật (quét bí mật, Dependabot, luật bảo vệ nhánh, workflow ghim SHA) | Xong |
 | A1 | Windows 10/11 x64 + ARM64: bộ cài NSIS cài theo người dùng, cập nhật tự động có ký ([ADR-0004](docs/ADR/0004-cua-so-nap-tu-xa-dieu-huong-cap-nhat.md)) | Mã xong, chờ bản phát hành đầu |
+| A1b | Màn "Ứng dụng của tôi": mỗi ứng dụng của hệ thống một cửa sổ riêng, danh sách origin theo từng cửa sổ ([ADR-0005](docs/ADR/0005-cua-so-rieng-theo-ung-dung.md)) | Mã xong, chờ bản phát hành |
 | A2 | Android 7.0+ (arm64-v8a, armeabi-v7a, x86_64) lên Google Play + quét QR đăng nhập | Chưa |
 | A3 | iPhone (khi có tài khoản Apple Developer, dự kiến 02/2027) | Chưa |
 
