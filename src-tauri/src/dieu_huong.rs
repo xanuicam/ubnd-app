@@ -133,12 +133,6 @@ pub fn nhan_va_tieu_de(host: &str) -> Option<(&'static str, &'static str)> {
         .map(|(_, nhan, tieu_de)| (*nhan, *tieu_de))
 }
 
-/// URL thuộc origin hiển thị trong cửa sổ chính.
-#[cfg(test)]
-pub fn la_origin_trong_app(url: &Url) -> bool {
-    la_origin_cua(CuaSo::Chinh, url)
-}
-
 fn la_origin_cua(cua_so: CuaSo, url: &Url) -> bool {
     la_https_cua(url, &cua_so.origin())
 }
